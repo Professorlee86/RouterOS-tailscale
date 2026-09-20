@@ -10,8 +10,37 @@ root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 scratch_dir = os.path.join(root_dir, "build_cache")
 os.makedirs(scratch_dir, exist_ok=True)
 
+import shutil
+import zipfile
+
 print("=== Building Tailscale Universal Image for ARM64 ===")
-upx_exe = os.path.join(scratch_dir, "upx.exe")
+
+def ensure_upx():
+    if shutil.which("upx"):
+        return shutil.which("upx")
+    local_upx = os.path.join(scratch_dir, "upx.exe")
+    if os.path.exists(local_upx):
+        return local_upx
+    # Check parent scratch dir
+    parent_scratch_upx = r"C:\Users\Administrator\.gemini\antigravity\brain\5fb40d52-ecb2-441a-9930-31e4ff736a4d\scratch\upx.exe"
+    if os.path.exists(parent_scratch_upx):
+        shutil.copy(parent_scratch_upx, local_upx)
+        return local_upx
+    print("Downloading UPX...")
+    url = "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.zip"
+    zip_path = os.path.join(scratch_dir, "upx.zip")
+    urllib.request.urlretrieve(url, zip_path)
+    with zipfile.ZipFile(zip_path, 'r') as z:
+        for name in z.namelist():
+            if name.endswith("upx.exe"):
+                with open(local_upx, "wb") as f:
+                    f.write(z.read(name))
+                break
+    try: os.remove(zip_path)
+    except: pass
+    return local_upx
+
+upx_exe = ensure_upx()
 
 # 1. Download Alpine minirootfs arm64 if not present
 alpine_url = "https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/aarch64/alpine-minirootfs-3.19.1-aarch64.tar.gz"
@@ -40,7 +69,7 @@ with tarfile.open(ts_tgz, "r:gz") as t:
                 f.write(t.extractfile(m).read())
 
 # UPX compress
-if os.path.exists(upx_exe):
+if upx_exe and os.path.exists(upx_exe):
     print("Compressing tailscaled & tailscale with UPX...")
     subprocess.run([upx_exe, "--best", "--lzma", ts_daemon], capture_output=True)
     subprocess.run([upx_exe, "--best", "--lzma", ts_cli], capture_output=True)
