@@ -1,8 +1,10 @@
-# RouterOS-Tailscale
+# RouterOS-Tailscale (x86 / CHR 专享版)
 
-专为 **MikroTik RouterOS 7** 深度定制的超轻量、低内存占用、自带底层端口穿透与多节点隔离的 Tailscale 自动化组网方案。
+专为 **MikroTik RouterOS 7 (x86_64 / CHR / PC 软路由 / 虚拟机)** 深度定制的超轻量、低内存占用、自带底层端口穿透与多节点隔离的 Tailscale 自动化组网方案。
 
-同时支持 **ARM64**（如 hAP ax²、ax³、RB5009、CCR2004 等）与 **x86_64**（如 PC 软路由、PVE / ESXi 虚拟机、CHR 等）。
+> 💡 **架构说明**：
+> * **ARM 架构硬件**（如 hAP ax²、hAP ax³、RB5009、CCR2004 等）：推荐使用 RouterOS 原生 ZeroTier 套件组网。
+> * **x86_64 / CHR / 虚拟化节点**：全面使用本项目方案，一键实现 Tailscale 组网与 WinBox / Web / SSH 远程穿透。
 
 ---
 
@@ -17,12 +19,11 @@
    * 自动穿透 **WinBox (8888 / 8291)**、**WebFIG (80 / 443)**、**SSH (22)**、**API (8728)**。
    * **支持 WinBox 图形界面动态修改端口**：在 WinBox 的 `Container -> Envs` 中直接修改 `FORWARD_PORTS` 变量即可实时增减映射端口，无需进命令行！
 
-3. **极致体积压缩（绝不撑爆 Flash 闪存）**
-   * 官方 Tailscale 镜像解压需 150MB+，而 hAP ax² 等设备内置存储仅 128MB（平时可用仅 40~50MB），官方镜像直接爆盘。
-   * 本项目通过裁剪冗余组件 + UPX 极致压缩，镜像仅 **21.4 MB**（x86 为 23.3 MB），解压后仅占 30MB 左右，留有充足安全余量。
+3. **极致体积压缩（仅 23.3 MB）**
+   * 官方 Tailscale 镜像解压需 150MB+；本项目通过裁剪冗余组件 + UPX 极致压缩，x86 镜像打包后仅 **23.3 MB**，极度轻量，秒级拉取与解压。
 
-4. **双架构与全版本自适应**
-   * **全自动架构探测**：RouterOS 部署脚本自动识别 CPU 是 `arm64` 还是 `x86_64` 并拉取对应镜像。
+4. **架构拦截与版本自适应**
+   * **ARM 架构安全拦截**：脚本内嵌 CPU 架构识别，若误在 ARM 设备上运行将自动提示并终止，保障网络与配置规范统一。
    * **语法全自适应**：完美兼容 ROS 7.24+ 新语法（`list=ts_envs`）与 ROS 7.12~7.17 旧语法（`name=ts_envs`）。
    * **彻底杜绝内核冲突**：默认预设 `TS_DEBUG_RESOLV_CONF=none` 与 `--accept-dns=false`，杜绝 Linux 内核 inotify 对 `/etc/resolv.conf` 的监听 panic 故障。
 
@@ -30,12 +31,12 @@
 
 ## 🚀 极速部署指南（10 秒一键执行）
 
-打开目标 RouterOS 的 **WinBox -> Terminal（终端）**，整段复制以下脚本粘贴执行即可：
+打开目标 x86 / CHR RouterOS 的 **WinBox -> Terminal（终端）**，整段复制以下脚本粘贴执行即可：
 
 ```routeros
 {
 # =========================================================
-# RouterOS Tailscale 全架构自动识别一键部署脚本 (终极稳健版)
+# RouterOS Tailscale x86/CHR 架构专享一键部署脚本 (终极稳健版)
 # =========================================================
 
 # 1. 基础配置（可按需修改此台设备的名称与网络）
@@ -49,25 +50,21 @@
 # 组合 VETH 地址
 :local vethAddress ($containerIp . $containerSubnet)
 
-# 2. 两个架构已验证的高速下载直链 (支持 AList / OSS / HTTP / HTTPS)
-:local urlArm64 "http://home.lcwl.info:5244/d/B/ROS/tailscale_universal_arm64.tar?sign=Bru64Z23zxvB1ayKJ0XTd4QQQJIoUfW0tX_AwICn3-c=:0"
-:local urlX86 "http://home.lcwl.info:5244/d/B/ROS/tailscale_universal_x86.tar?sign=HBNB5liQPl20HnqmZIPsgJZwbZJmCScazEk8_NQhCUk=:0"
+# 2. x86_64 极简镜像已验证的高速下载直链 (支持 AList / OSS / HTTP / HTTPS)
+:local imgUrl "http://home.lcwl.info:5244/d/B/ROS/tailscale_universal_x86.tar?sign=HBNB5liQPl20HnqmZIPsgJZwbZJmCScazEk8_NQhCUk=:0"
 
-# 3. 自动探测系统 CPU 架构并匹配下载链接
+# 3. 校验系统架构 (专为 x86 / x86_64 / CHR / amd64 设计，拦截 ARM 误执行)
 :local arch [/system/resource/get architecture-name]
 :put ("[*] 检测到当前系统硬件架构: " . $arch)
 
-:local imgUrl ""
-:if ($arch ~ "arm64" || $arch ~ "aarch64") do={
-    :set imgUrl $urlArm64
-    :put ("[*] 成功匹配 -> 自动选择 ARM64 极简镜像")
+:if ($arch ~ "arm") do={
+    :error ("[-] 提示：当前设备为 ARM 架构 (" . $arch . ")。ARM 设备请统一使用 ZeroTier 组网，本方案专用于 x86/CHR 设备！已终止！")
+}
+
+:if (!($arch ~ "x86" || $arch ~ "amd64" || $arch ~ "chr")) do={
+    :put ("[-] 提示：当前架构 " . $arch . "，尝试继续部署 x86 镜像...")
 } else={
-    :if ($arch ~ "x86" || $arch ~ "amd64" || $arch ~ "chr") do={
-        :set imgUrl $urlX86
-        :put ("[*] 成功匹配 -> 自动选择 x86_64 极简镜像")
-    } else={
-        :error ("[-] 错误：当前系统架构 " . $arch . " 暂不支持，已终止！")
-    }
+    :put ("[*] 成功匹配 -> 当前设备为 x86/CHR 架构，准备拉取专用极简镜像")
 }
 
 # 4. 自动探测 LAN 网桥接口 (优先获取 172.16.x.x 所在网桥，兜底使用 bri_lan 或系统首个网桥)

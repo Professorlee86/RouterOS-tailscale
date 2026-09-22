@@ -1,6 +1,6 @@
 {
 # =========================================================
-# RouterOS Tailscale 全架构自动识别一键部署脚本 (终极稳健版)
+# RouterOS Tailscale x86/CHR 架构专享一键部署脚本 (终极稳健版)
 # =========================================================
 
 # 1. 基础配置（可按需修改此台设备的名称与网络）
@@ -14,25 +14,21 @@
 # 组合 VETH 地址
 :local vethAddress ($containerIp . $containerSubnet)
 
-# 2. 两个架构已验证的高速下载直链 (支持 AList / OSS / HTTP / HTTPS)
-:local urlArm64 "http://home.lcwl.info:5244/d/B/ROS/tailscale_universal_arm64.tar?sign=Bru64Z23zxvB1ayKJ0XTd4QQQJIoUfW0tX_AwICn3-c=:0"
-:local urlX86 "http://home.lcwl.info:5244/d/B/ROS/tailscale_universal_x86.tar?sign=HBNB5liQPl20HnqmZIPsgJZwbZJmCScazEk8_NQhCUk=:0"
+# 2. x86_64 极简镜像已验证的高速下载直链 (支持 AList / OSS / HTTP / HTTPS)
+:local imgUrl "http://home.lcwl.info:5244/d/B/ROS/tailscale_universal_x86.tar?sign=HBNB5liQPl20HnqmZIPsgJZwbZJmCScazEk8_NQhCUk=:0"
 
-# 3. 自动探测系统 CPU 架构并匹配下载链接
+# 3. 校验系统架构 (专为 x86 / x86_64 / CHR / amd64 设计，拦截 ARM 误执行)
 :local arch [/system/resource/get architecture-name]
 :put ("[*] 检测到当前系统硬件架构: " . $arch)
 
-:local imgUrl ""
-:if ($arch ~ "arm64" || $arch ~ "aarch64") do={
-    :set imgUrl $urlArm64
-    :put ("[*] 成功匹配 -> 自动选择 ARM64 极简镜像")
+:if ($arch ~ "arm") do={
+    :error ("[-] 提示：当前设备为 ARM 架构 (" . $arch . ")。ARM 设备请统一使用 ZeroTier 组网，本方案专用于 x86/CHR 设备！已终止！")
+}
+
+:if (!($arch ~ "x86" || $arch ~ "amd64" || $arch ~ "chr")) do={
+    :put ("[-] 提示：当前架构 " . $arch . "，尝试继续部署 x86 镜像...")
 } else={
-    :if ($arch ~ "x86" || $arch ~ "amd64" || $arch ~ "chr") do={
-        :set imgUrl $urlX86
-        :put ("[*] 成功匹配 -> 自动选择 x86_64 极简镜像")
-    } else={
-        :error ("[-] 错误：当前系统架构 " . $arch . " 暂不支持，已终止！")
-    }
+    :put ("[*] 成功匹配 -> 当前设备为 x86/CHR 架构，准备拉取专用极简镜像")
 }
 
 # 4. 自动探测 LAN 网桥接口 (优先获取 172.16.x.x 所在网桥，兜底使用 bri_lan 或系统首个网桥)
