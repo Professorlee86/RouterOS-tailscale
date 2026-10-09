@@ -15,7 +15,7 @@
 :local vethAddress ($containerIp . $containerSubnet)
 
 # 2. x86_64 极简镜像已验证的高速下载直链 (支持 AList / OSS / HTTP / HTTPS)
-:local imgUrl "http://home.lcwl.info:5244/d/B/ROS/tailscale_universal_x86.tar?sign=HBNB5liQPl20HnqmZIPsgJZwbZJmCScazEk8_NQhCUk=:0"
+:local imgUrl "http://nas.lcwl.info:5244/d/B/ROS/tailscale_universal_x86.tar?sign=HBNB5liQPl20HnqmZIPsgJZwbZJmCScazEk8_NQhCUk=:0"
 
 # 3. 校验系统架构 (专为 x86 / x86_64 / CHR / amd64 设计，拦截 ARM 误执行)
 :local arch [/system/resource/get architecture-name]
