@@ -1,11 +1,11 @@
 {
 # =========================================================
-# RouterOS Tailscale x86/CHR 架构专享一键部署脚本 (终极稳健版)
+# RouterOS Tailscale (x86 / CHR 架构) 一键极速部署脚本
 # =========================================================
 
 # 1. 基础配置（可按需修改此台设备的名称与网络）
 :local tsAuthKey "tskey-auth-kzaGLUqPz911CNTRL-Cn3yR56K5xBj5CH4uiDRxBywXDWN6gWH"
-:local tsHostName "MikroTik-Node"
+:local tsHostName "ROS-x86-Node"
 :local forwardPorts "8888,8291:8888,80,443,22,8728"
 :local containerIp "172.16.0.3"
 :local containerSubnet "/16"
@@ -14,24 +14,10 @@
 # 组合 VETH 地址
 :local vethAddress ($containerIp . $containerSubnet)
 
-# 2. x86_64 极简镜像已验证的高速下载直链 (支持 AList / OSS / HTTP / HTTPS)
+# 2. x86_64 极简镜像高速下载直链 (支持 AList / OSS / HTTP / HTTPS)
 :local imgUrl "http://nas.lcwl.info:5244/d/B/ROS/tailscale_universal_x86.tar?sign=HBNB5liQPl20HnqmZIPsgJZwbZJmCScazEk8_NQhCUk=:0"
 
-# 3. 校验系统架构 (专为 x86 / x86_64 / CHR / amd64 设计，拦截 ARM 误执行)
-:local arch [/system/resource/get architecture-name]
-:put ("[*] 检测到当前系统硬件架构: " . $arch)
-
-:if ($arch ~ "arm") do={
-    :error ("[-] 提示：当前设备为 ARM 架构 (" . $arch . ")。ARM 设备请统一使用 ZeroTier 组网，本方案专用于 x86/CHR 设备！已终止！")
-}
-
-:if (!($arch ~ "x86" || $arch ~ "amd64" || $arch ~ "chr")) do={
-    :put ("[-] 提示：当前架构 " . $arch . "，尝试继续部署 x86 镜像...")
-} else={
-    :put ("[*] 成功匹配 -> 当前设备为 x86/CHR 架构，准备拉取专用极简镜像")
-}
-
-# 4. 自动探测 LAN 网桥接口 (优先获取 172.16.x.x 所在网桥，兜底使用 bri_lan 或系统首个网桥)
+# 3. 自动探测 LAN 网桥接口 (优先获取 172.16.x.x 所在网桥，兜底使用 bri_lan 或系统首个网桥)
 :local lanBridge "bri_lan"
 :do {
     :local addrList [/ip/address/find address~"172.16."]
@@ -50,7 +36,7 @@
 }
 :put ("[*] 匹配使用的 LAN 网桥: " . $lanBridge)
 
-# 5. 清理旧容器 (确保脚本可重复执行，支持一键升级)
+# 4. 清理旧容器 (确保脚本可重复执行，支持一键升级)
 :local oldContainers [/container/find interface=veth-ts]
 :if ([:len $oldContainers] > 0) do={
     :put ("[*] 检测到已存在旧的 Tailscale 容器，正在停止并清理...")
@@ -63,13 +49,13 @@
     :delay 1s
 }
 
-# 6. 创建虚拟网卡 veth-ts (防重复添加)
+# 5. 创建虚拟网卡 veth-ts (防重复添加)
 :if ([:len [/interface/veth/find name=veth-ts]] = 0) do={
     /interface/veth/add name=veth-ts address=$vethAddress gateway=$vethGw
     :put ("[*] 已创建虚拟网卡 veth-ts (" . $vethAddress . ")")
 }
 
-# 7. 将虚拟网卡绑定到 LAN 网桥
+# 6. 将虚拟网卡绑定到 LAN 网桥
 :if ([:len $lanBridge] > 0) do={
     :if ([:len [/interface/bridge/port/find interface=veth-ts]] = 0) do={
         /interface/bridge/port/add bridge=$lanBridge interface=veth-ts
@@ -79,13 +65,13 @@
     :put ("[-] 提示: 未检测到可用网桥，请手动将 veth-ts 绑定至对应网桥")
 }
 
-# 8. 添加 Tailscale 静态回程路由 (指引 100.64.0.0/10 流量进入容器)
+# 7. 添加 Tailscale 静态回程路由 (指引 100.64.0.0/10 流量进入容器)
 :if ([:len [/ip/route/find dst-address~"100.64.0.0"]] = 0) do={
     /ip/route/add dst-address=100.64.0.0/10 gateway=$containerIp comment="Tailscale Route"
     :put ("[*] 已添加 100.64.0.0/10 回程路由 -> " . $containerIp)
 }
 
-# 9. 写入环境变量 (完美自适应 7.24+ 的 list= 与旧版 7.17- 的 name=)
+# 8. 写入环境变量 (自适应 7.24+ 的 list= 与旧版 7.17- 的 name=)
 :put ("[*] 配置容器环境变量...")
 :do { /container/envs/remove [find name=ts_envs] } on-error={}
 :do { /container/envs/remove [find list=ts_envs] } on-error={}
@@ -100,14 +86,14 @@
     /container/envs/add name=ts_envs key=FORWARD_PORTS value=$forwardPorts
 }
 
-# 10. 从 AList 满速拉取镜像包 (自动忽略证书报错，保障 HTTPS/HTTP 均可下载)
+# 9. 从 AList 满速拉取镜像包 (自动忽略证书报错，保障 HTTPS/HTTP 均可下载)
 :put ("[*] 正在从 AList 满速下载镜像，请稍候约 2~3 秒...")
 :do { /file/remove "tailscale_pkg.tar" } on-error={
     :do { /file/remove [find name="tailscale_pkg.tar"] } on-error={}
 }
 /tool/fetch url=$imgUrl dst-path="tailscale_pkg.tar" check-certificate=no
 
-# 11. 创建容器 (自适应新版 envlist 与旧版 envs)
+# 10. 创建容器 (自适应新版 envlist 与旧版 envs)
 :put ("[*] 正在解压并创建容器...")
 :do {
     /container/add file=tailscale_pkg.tar interface=veth-ts envlist=ts_envs start-on-boot=yes logging=yes
@@ -115,7 +101,7 @@
     /container/add file=tailscale_pkg.tar interface=veth-ts envs=ts_envs start-on-boot=yes logging=yes
 }
 
-# 12. 智能等待解压完成并启动容器
+# 11. 智能等待解压完成并启动容器
 :put ("[*] 等待解压完成...")
 :local cWait 0
 :while ([:len [/container/find interface=veth-ts status=stopped]] = 0 && [:len [/container/find interface=veth-ts status=running]] = 0 && $cWait < 30) do={
@@ -134,7 +120,7 @@
     }
 }
 
-# 13. 清理下载包释放存储空间
+# 12. 清理下载包释放存储空间
 :delay 2s
 :do { /file/remove "tailscale_pkg.tar" } on-error={
     :do { /file/remove [find name="tailscale_pkg.tar"] } on-error={}
